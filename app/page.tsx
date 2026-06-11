@@ -1,65 +1,133 @@
-import Image from "next/image";
+"use client"
+
+import { useMemo, useState, useCallback } from "react"
+import { computeLIPM } from "@/lib/lipm"
+import { PRESETS, buildPresetSteps, PRESET_DEFAULT_NUM_STEPS, SIDEWARD_DEFAULT_STEP_SY } from "@/lib/presets"
+import type { GaitParams, PresetKey } from "@/lib/types"
+import { ControlPanel } from "@/components/control-panel"
+import { Viewport3D } from "@/components/viewport-3d"
+import { EquationsPanel } from "@/components/equations-panel"
+import { ChartTabs } from "@/components/chart-tabs"
+import { ResizeHandle } from "@/components/resize-handle"
+
+const MIN_SIDE = 200
+const MAX_SIDE = 520
+const MIN_BOTTOM = 140
+const MAX_BOTTOM = 520
 
 export default function Home() {
+  const [preset, setPreset] = useState<PresetKey>("straight")
+  const [numSteps, setNumSteps] = useState(PRESET_DEFAULT_NUM_STEPS.straight!)
+  const [sidewardStepSy, setSidewardStepSy] = useState(SIDEWARD_DEFAULT_STEP_SY)
+  const [sidewardStartStop, setSidewardStartStop] = useState(false)
+  const [params, setParams] = useState<GaitParams>({
+    ...PRESETS.straight,
+    steps: buildPresetSteps("straight", PRESET_DEFAULT_NUM_STEPS.straight!),
+  })
+  const [activeStep, setActiveStep] = useState<number | null>(null)
+
+  const [leftWidth, setLeftWidth] = useState(288)
+  const [rightWidth, setRightWidth] = useState(288)
+  const [bottomHeight, setBottomHeight] = useState(256)
+
+  const result = useMemo(() => computeLIPM(params), [params])
+
+  function handlePreset(key: PresetKey) {
+    setPreset(key)
+    const n = PRESET_DEFAULT_NUM_STEPS[key] ?? numSteps
+    if (key !== "custom") setNumSteps(n)
+    setParams({ ...PRESETS[key], steps: buildPresetSteps(key, n, sidewardStepSy, sidewardStartStop) })
+    setActiveStep(null)
+  }
+
+  function handleNumSteps(n: number) {
+    setNumSteps(n)
+    if (preset !== "custom") {
+      setParams(p => ({ ...p, steps: buildPresetSteps(preset, n, sidewardStepSy, sidewardStartStop) }))
+    }
+  }
+
+  function handleSidewardStepSy(v: number) {
+    setSidewardStepSy(v)
+    if (preset === "sideward") {
+      setParams(p => ({ ...p, steps: buildPresetSteps("sideward", numSteps, v, sidewardStartStop) }))
+    }
+  }
+
+  function handleSidewardStartStop(v: boolean) {
+    setSidewardStartStop(v)
+    if (preset === "sideward") {
+      setParams(p => ({ ...p, steps: buildPresetSteps("sideward", numSteps, sidewardStepSy, v) }))
+    }
+  }
+
+  const resizeLeft = useCallback((d: number) =>
+    setLeftWidth(w => Math.max(MIN_SIDE, Math.min(MAX_SIDE, w + d))), [])
+
+  const resizeRight = useCallback((d: number) =>
+    setRightWidth(w => Math.max(MIN_SIDE, Math.min(MAX_SIDE, w - d))), [])
+
+  const resizeBottom = useCallback((d: number) =>
+    setBottomHeight(h => Math.max(MIN_BOTTOM, Math.min(MAX_BOTTOM, h - d))), [])
+
+  const Tc = Math.sqrt(params.zc / params.g)
+
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
+    <div className="flex flex-col h-screen bg-background text-foreground overflow-hidden">
+      <header className="flex items-center justify-between px-6 py-3 border-b shrink-0">
+        <div>
+          <h1 className="text-lg font-semibold tracking-tight">3D LIPM Walking Pattern Visualizer</h1>
+          <p className="text-xs text-muted-foreground">Linear Inverted Pendulum Model · KIT</p>
         </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
+        <span className="text-xs text-muted-foreground font-mono">
+          T_c = {Tc.toFixed(3)} s &nbsp;|&nbsp; {result.steps.length} steps &nbsp;|&nbsp; {result.trajectory.length} samples
+        </span>
+      </header>
+
+      <div className="flex flex-1 overflow-hidden min-h-0">
+        <aside style={{ width: leftWidth }} className="shrink-0 overflow-y-auto">
+          <ControlPanel
+            params={params}
+            preset={preset}
+            numSteps={numSteps}
+            sidewardStepSy={sidewardStepSy}
+            sidewardStartStop={sidewardStartStop}
+            activeStep={activeStep}
+            steps={result.steps}
+            onParams={setParams}
+            onPreset={handlePreset}
+            onNumSteps={handleNumSteps}
+            onSidewardStepSy={handleSidewardStepSy}
+            onSidewardStartStop={handleSidewardStartStop}
+            onStepSelect={setActiveStep}
+          />
+        </aside>
+
+        <ResizeHandle direction="horizontal" onResize={resizeLeft} />
+
+        <main className="flex-1 min-w-0 flex flex-col overflow-hidden">
+          <div className="flex-1 min-h-0">
+            <Viewport3D
+              result={result}
+              params={params}
+              activeStep={activeStep}
+              onStepSelect={setActiveStep}
             />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
-        </div>
-      </main>
+          </div>
+
+          <ResizeHandle direction="vertical" onResize={resizeBottom} />
+
+          <div style={{ height: bottomHeight }} className="shrink-0 overflow-hidden">
+            <ChartTabs result={result} params={params} activeStep={activeStep} />
+          </div>
+        </main>
+
+        <ResizeHandle direction="horizontal" onResize={resizeRight} />
+
+        <aside style={{ width: rightWidth }} className="shrink-0 overflow-y-auto">
+          <EquationsPanel params={params} />
+        </aside>
+      </div>
     </div>
-  );
+  )
 }
