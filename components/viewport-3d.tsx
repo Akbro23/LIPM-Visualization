@@ -14,7 +14,7 @@ interface Props {
   onStepSelect: (n: number | null) => void
 }
 
-const toThree = (x: number, y: number, z: number) => new THREE.Vector3(x, z, y)
+const toThree = (x: number, y: number, z: number) => new THREE.Vector3(x, z, -y)
 
 // ── CoM trajectory lines ────────────────────────────────────────────────────
 function TrajectoryLines({ result, activeStep }: { result: LIPMResult; activeStep: number | null }) {
@@ -55,7 +55,7 @@ function FootMarkers({ result, activeStep, onStepSelect }: {
         const isActive = activeStep === s.n
         const color = stepColor(s.n)
         return (
-          <group key={s.n} position={[s.pxStar, 0, s.pyStar]}>
+          <group key={s.n} position={[s.pxStar, 0, -s.pyStar]}>
             <Box
               args={[0.14, 0.012, 0.08]}
               onClick={() => onStepSelect(isActive ? null : s.n)}
@@ -93,10 +93,10 @@ function AnimatedElements({ result }: { result: LIPMResult }) {
     const pt  = traj[Math.max(0, Math.min(idx, traj.length - 1))]
     if (!pt) return
     const step = result.steps[pt.step]
-    comRef.current?.position.set(pt.x, pt.z, pt.y)
+    comRef.current?.position.set(pt.x, pt.z, -pt.y)
     if (step) {
-      _foot.set(step.pxStar, 0, step.pyStar)
-      _com.set(pt.x, pt.z, pt.y)
+      _foot.set(step.pxStar, 0, -step.pyStar)
+      _com.set(pt.x, pt.z, -pt.y)
       footGlowRef.current?.position.copy(_foot)
       _dir.subVectors(_com, _foot)
       const length = _dir.length()
@@ -241,6 +241,7 @@ function Scene({ result, params, activeStep, onStepSelect, resetRef }: Props & {
         }}
       />
       <CanvasEvents onReset={(fn) => { resetRef.current = fn }} />
+
     </>
   )
 }
