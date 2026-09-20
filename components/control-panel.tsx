@@ -114,7 +114,7 @@ export function ControlPanel({ params, preset, numSteps, sidewardStepSy, sidewar
                 type="checkbox"
                 checked={sidewardStartStop}
                 onChange={e => onSidewardStartStop(e.target.checked)}
-                className="accent-primary"
+                className="accent-primary cursor-pointer"
               />
               Include start / stop
             </label>

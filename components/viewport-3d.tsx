@@ -44,11 +44,22 @@ function TrajectoryLines({ result, activeStep }: { result: LIPMResult; activeSte
 }
 
 // ── Foot placement markers ──────────────────────────────────────────────────
+// The canvas is a single DOM node, so hover feedback for the clickable footprints
+// has to be driven imperatively on its style rather than with a CSS class.
 function FootMarkers({ result, activeStep, onStepSelect }: {
   result: LIPMResult
   activeStep: number | null
   onStepSelect: (n: number | null) => void
 }) {
+  const { gl } = useThree()
+
+  const setCursor = useCallback((value: string) => {
+    gl.domElement.style.cursor = value
+  }, [gl])
+
+  // Never leave the canvas stuck on "pointer" if a marker unmounts while hovered
+  useEffect(() => () => { gl.domElement.style.cursor = "" }, [gl])
+
   return (
     <>
       {result.steps.map((s) => {
@@ -59,6 +70,8 @@ function FootMarkers({ result, activeStep, onStepSelect }: {
             <Box
               args={[0.14, 0.012, 0.08]}
               onClick={() => onStepSelect(isActive ? null : s.n)}
+              onPointerOver={(e) => { e.stopPropagation(); setCursor("pointer") }}
+              onPointerOut={() => setCursor("")}
             >
               <meshStandardMaterial color={color} opacity={isActive ? 1 : 0.55} transparent />
             </Box>
@@ -250,12 +263,12 @@ export function Viewport3D(props: Props) {
   const resetRef = useRef<() => void>(() => {})
   return (
     <div className="relative w-full h-full">
-      <Canvas camera={{ position: CAM_POS, fov: 45, near: 0.001 }} className="w-full h-full">
+      <Canvas camera={{ position: CAM_POS, fov: 45, near: 0.001 }} className="w-full h-full cursor-grab active:cursor-grabbing">
         <Scene {...props} resetRef={resetRef} />
       </Canvas>
       <button
         onClick={() => resetRef.current?.()}
-        className="absolute bottom-2 right-2 text-[10px] px-2 py-1 rounded bg-background/70 border text-muted-foreground hover:text-foreground backdrop-blur-sm"
+        className="absolute bottom-2 right-2 cursor-pointer text-[10px] px-2 py-1 rounded bg-background/70 border text-muted-foreground hover:text-foreground backdrop-blur-sm"
       >
         Reset view
       </button>
