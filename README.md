@@ -1,36 +1,95 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# 3D LIPM Walking Pattern Visualizer
 
-## Getting Started
+An interactive 3D visualization of the **Linear Inverted Pendulum Model** walking pattern generator — the foot-placement algorithm from Kajita et al., implemented end to end and rendered live in the browser.
 
-First, run the development server:
+![The visualizer running a straight walk: CoM trajectory, live pendulum rod, foot placements, and synchronized charts](public/demo.gif)
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+## What it does
+
+Every parameter you change re-runs the full pattern generator and redraws the scene immediately — there is no precomputed data and no animation baking. Drag the CoM height slider and you watch the time constant `T_c`, the step timing, the foot placements and the phase portraits all move together.
+
+- **3D viewport** — CoM trajectory colored per step, the live inverted-pendulum rod swinging from the current support foot, and clickable footprint markers for every placement.
+- **Charts** — CoM position, velocity, phase portraits (`x`/`ẋ` and `y`/`ẏ`), and a top-down view of the walking path with foot placements overlaid.
+- **Step table** — the computed `p*`, `x̄`, `ȳ` for each step. Click a row (or a footprint in the 3D view) to isolate that step everywhere.
+- **Equations panel** — the equations actually being evaluated, with the current numeric values of `T_c`, `C`, `S` substituted in.
+- **Presets** — straight walk, sideward walk, and a stumble-and-recovery case that shows the foot-placement correction doing real work.
+
+## The model
+
+The LIPM constrains the CoM to a horizontal plane at constant height `z_c`, which linearizes the inverted-pendulum dynamics to
+
+```
+ẍ = (g/z_c)·(x − pₓ*)        ÿ = (g/z_c)·(y − p_y*)
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+with the analytical solution used directly for integration (no numerical solver):
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+```
+T_c = √(z_c/g)
+x(t) = (x₀ − p*)·cosh(t/T_c) + T_c·ẋ₀·sinh(t/T_c) + p*
+ẋ(t) = ((x₀ − p*)/T_c)·sinh(t/T_c) + ẋ₀·cosh(t/T_c)
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+The pattern generator in [lib/lipm.ts](lib/lipm.ts) is a direct transcription of the algorithm:
 
-## Learn More
+| Step | Meaning | Function |
+| --- | --- | --- |
+| 1 | Nominal foot placement recurrence `p⁽ⁿ⁾ = p⁽ⁿ⁻¹⁾ + s⁽ⁿ⁾` | `nextFootPlacement` |
+| 2 | Walk primitive center `x̄`, `ȳ` from the **next** step's parameters | `walkPrimitive` |
+| 3 | Walk primitive velocities `v̄ₓ`, `v̄_y` | `walkPrimitiveVelocities` |
+| 4 | LIPM dynamics about the support point | `integrate` |
+| 5 | Desired terminal state `xᵈ = p⁽ⁿ⁾ + x̄⁽ⁿ⁾` | `desiredState` |
+| 6 | Modified foot placement `p*` minimizing `N = a(xᵈ − x_f)² + b(ẋᵈ − ẋ_f)²` | `modifiedFootPlacement` |
 
-To learn more about Next.js, take a look at the following resources:
+The last one is the interesting one: rather than stepping where the nominal plan says, the robot steps where it needs to in order to land the CoM in the right state at the end of the step. The weights `a` (position error) and `b` (velocity error) trade those two off, and both are exposed as sliders — crank `b` up on the stumble preset and watch the recovery change character.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+Each step is sampled at 100 points, so the trajectory is dense enough to read the hyperbolic curvature between foot exchanges.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Running it
 
-## Deploy on Vercel
+```bash
+pnpm install
+pnpm dev
+```
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+Then open [http://localhost:3000](http://localhost:3000).
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## Controls
+
+| Action | Input |
+| --- | --- |
+| Orbit the camera | Left- or right-drag |
+| Fly forward / back | Scroll wheel |
+| Pan | Middle-drag |
+| Reset the view | Double-click, or the *Reset view* button |
+| Isolate a step | Click a footprint marker or a step-table row |
+| Resize a panel | Drag the divider between panels |
+
+## Parameters
+
+| Parameter | Symbol | Range | Default |
+| --- | --- | --- | --- |
+| CoM height | `z_c` | 0.4 – 1.2 m | 0.80 m |
+| Support period | `T_sup` | 0.3 – 1.5 s | 0.80 s |
+| Gravity | `g` | 1 – 20 m/s² | 9.81 m/s² |
+| Position weight | `a` | 0.1 – 50 | 10 |
+| Velocity weight | `b` | 0.1 – 20 | 1 |
+
+Gravity is a slider on purpose — dropping it to lunar values stretches `T_c` and makes the slow, floaty gait that falls out of the same equations.
+
+## Project layout
+
+```
+app/page.tsx                    Layout, shared state, resizable panels
+lib/lipm.ts                     The pattern generator
+lib/presets.ts                  Straight / sideward / stumble gait definitions
+lib/types.ts                    GaitParams, StepData, TrajectoryPoint
+components/viewport-3d.tsx      react-three-fiber scene
+components/chart-tabs.tsx       Recharts plots
+components/control-panel.tsx    Presets, sliders, step table
+components/equations-panel.tsx  KaTeX equations with live values
+```
+
+## Built with
+
+Next.js 16 · React 19 · react-three-fiber + drei · Recharts · KaTeX · Tailwind CSS v4 · shadcn/ui on Base UI
