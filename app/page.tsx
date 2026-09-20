@@ -77,7 +77,7 @@ export default function Home() {
       <header className="flex items-center justify-between px-6 py-3 border-b shrink-0">
         <div>
           <h1 className="text-lg font-semibold tracking-tight">3D LIPM Walking Pattern Visualizer</h1>
-          <p className="text-xs text-muted-foreground">Linear Inverted Pendulum Model · KIT</p>
+          <p className="text-xs text-muted-foreground">Linear Inverted Pendulum Model</p>
         </div>
         <span className="text-xs text-muted-foreground font-mono">
           T_c = {Tc.toFixed(3)} s &nbsp;|&nbsp; {result.steps.length} steps &nbsp;|&nbsp; {result.trajectory.length} samples
